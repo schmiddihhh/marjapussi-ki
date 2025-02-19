@@ -1,5 +1,3 @@
-mod alpha_beta;
-
 fn main() {
-    
+    println!("Nothing happens here yet!");
 }

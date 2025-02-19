@@ -1,6 +1,8 @@
 use std::cmp::max;
 use std::cmp::min;
 
+
+// this trait specifies the requirements for a node in the search tree
 pub trait State<M> {
     fn legal_moves(&self) -> Vec<M>;
     fn apply_move(&self, next_move: &M) -> Self;
@@ -9,6 +11,9 @@ pub trait State<M> {
     fn evaluate(&self) -> i32;
 }
 
+
+// this function finds the best move to make in the current game state
+// a recursive implementation of alpha-beta tree search is used within this function
 pub fn alpha_beta_search<M, S>(start_state: S) -> M
 where M: Copy, S: State<M> {
 
@@ -42,7 +47,8 @@ where M: Copy, S: State<M> {
     best_move.expect("There are no legal moves for the player")
 }
 
-// in Anlehnung an den Pseudocode zu Alpha-Beta auf Wikipedia DE
+
+// recursive implementation of alpha-beta search (called by alpha_beta_search)
 fn recursive_minimax<M, S>(start_node: &S, alpha: i32, beta: i32) -> i32
 where S: State<M> {
     if start_node.is_leaf() {
