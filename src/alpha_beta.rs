@@ -14,8 +14,8 @@ pub trait State<M> {
 
 // this function finds the best move to make in the current game state
 // a recursive implementation of alpha-beta tree search is used within this function
-pub fn alpha_beta_search<M, S>(start_state: S) -> M
-where M: Copy, S: State<M> {
+pub fn alpha_beta_search<M, S>(start_state: S, max_depth: Option<i32>) -> (M, i32)
+where M: Clone, S: State<M> {
 
     // the search has to start at a state where the maximizing player is at turn
     assert!(start_state.is_maximizing(), 
@@ -37,28 +37,28 @@ where M: Copy, S: State<M> {
     // we will simply choose the move with the highest evaluation
     for next_move in start_state.legal_moves().into_iter() {
         let next_state = start_state.apply_move(&next_move);
-        let eval = recursive_minimax(&next_state, alpha, beta);
+        let eval = recursive_minimax(&next_state, alpha, beta, 0, max_depth);
         if eval > max_eval {
             max_eval = eval;
             best_move = Some(next_move);
         }
         alpha = max(alpha, eval);
     }
-    best_move.expect("There are no legal moves for the player")
+    (best_move.expect("There are no legal moves for the player"), alpha)
 }
 
 
 // recursive implementation of alpha-beta search (called by alpha_beta_search)
-fn recursive_minimax<M, S>(start_node: &S, alpha: i32, beta: i32) -> i32
+fn recursive_minimax<M, S>(start_node: &S, alpha: i32, beta: i32, depth: i32, max_depth: Option<i32>) -> i32
 where S: State<M> {
-    if start_node.is_leaf() {
+    if Some(depth) == max_depth || start_node.is_leaf() {
         return start_node.evaluate();
     } else if start_node.is_maximizing() {
         let mut alpha = alpha;
         let mut max_eval: i32 = i32::MIN;
         for next_move in start_node.legal_moves() {
             let next_state = start_node.apply_move(&next_move);
-            let eval = recursive_minimax(&next_state, alpha, beta);
+            let eval = recursive_minimax(&next_state, alpha, beta, depth + 1, max_depth);
             max_eval = max(max_eval, eval);
             alpha = max(alpha, eval);
             if beta <= alpha {
@@ -71,7 +71,7 @@ where S: State<M> {
         for next_move in start_node.legal_moves() {
             let mut beta = beta;
             let next_state = start_node.apply_move(&next_move);
-            let eval = recursive_minimax(&next_state, alpha, beta);
+            let eval = recursive_minimax(&next_state, alpha, beta, depth + 1, max_depth);
             min_eval = min(min_eval, eval);
             beta = min(beta, eval);
             if beta <= alpha {
@@ -92,7 +92,7 @@ mod tests {
 
     // every test state should have a left and a right child (except the leaf states, which have none)
     // therefore, the only allowed moves are "Left" and "Right"
-    #[derive(Copy, Clone)]
+    #[derive(Clone, Copy, PartialEq)]
     enum Move {
         Left,
         Right
@@ -118,7 +118,7 @@ mod tests {
             // find the depth and ID for the child node
             let new_depth: i32 = self.depth + 1;
             let new_id: i32;
-            if matches!(next_move, Move::Left) {
+            if *next_move == Move::Left {
                 new_id = self.id * 2;
             } else {
                 new_id = self.id * 2 + 1;
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn test_alpha_beta() {
         let start_state = TestState { depth: 0, id: 0 };
-        let chosen_move = alpha_beta_search(start_state);
-        assert!(matches!(chosen_move, Move::Left));
+        let result = alpha_beta_search(start_state, None);
+        assert!(result == (Move::Left, 3));
     }
 }
