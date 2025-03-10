@@ -14,18 +14,26 @@ use marjapussi::game::cards::{Value, Suit, pairs, halves, Card};
 use marjapussi::game::gamestate::GamePhase;
 use marjapussi::game::player::PlaceAtTable;
 
+static mut COUNT_TREES: u32 = 0;
+static mut COUNT_NODES: u32 = 0;
+static mut COUNT_CHILDREN: u32 = 0;
+
+
 pub struct CheaterV1 {
-    name: String,
-    position: PlaceAtTable,
-    to_communicate: Vec<BiddingInfos>
+    pub name: String,
+    pub position: PlaceAtTable,
+    to_communicate: Vec<BiddingInfos>,
+    search_depth: u32
 }
 
+
 impl CheaterV1 {
-    pub fn new(name: &str, position: u8) -> Self {
+    pub fn new(name: &str, position: u8, search_depth: u32) -> Self {
         CheaterV1 {
             name: String::from(name),
             position: PlaceAtTable(position),
-            to_communicate: vec![]
+            to_communicate: vec![],
+            search_depth
         }
     }
 
@@ -72,7 +80,7 @@ impl CheaterV1 {
         }
 
         // save the communication info
-        // first info to communicate should be the last element (we will use pop to get the information), thus the reverse
+        // first info to communicate should be the last element (we will use pop() to get the information), thus the reverse
         to_communicate.reverse();
         self.to_communicate = to_communicate;
     }
@@ -211,7 +219,7 @@ impl MarjapussiCheater for CheaterV1 {
         if self.position != game.state.player_at_turn {
             println!("\nALAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARM (player at turn and player choosing an action mismatch)");
         }
-        
+
         // choose an action
         // if there is only one option, we need no further evaluation
         if legal_actions.len() == 1 {
@@ -221,11 +229,22 @@ impl MarjapussiCheater for CheaterV1 {
             match game.state.phase {
                 GamePhase::Bidding => self.bid(game, legal_actions),
                 // in case the game phase is GamePhase::Raising, we will sort out all raising actions within the search and just play a card
-                GamePhase::StartTrick | GamePhase::Trick | GamePhase::Raising => alpha_beta_search(AlphaBetaGameState{owning_player: self.position.clone(), game, depth: 0, debugging_depth: -1}, Some(12)).0,
+                GamePhase::StartTrick | GamePhase::Trick | GamePhase::Raising => {
+                    unsafe {
+                        COUNT_TREES += 1;
+                    }
+                    alpha_beta_search(AlphaBetaGameState{owning_player: self.position.clone(), game, depth: 0, debugging_depth: -1}, Some(self.search_depth)).0
+                },
                 _ => legal_actions.into_iter().nth(0).expect("Player was asked to choose an action, but there are no legal actions")
             }
         }
-        
-        
     }
+}
+
+
+pub unsafe fn print_avg_tree_size() {
+    let avg_nodes_per_tree = f64::from(COUNT_NODES) / f64::from(COUNT_TREES);
+    let avg_children_per_node = f64::from(COUNT_CHILDREN) / f64::from(COUNT_NODES);
+    println!("avg nodes per tree: {}", avg_nodes_per_tree);
+    println!("avg children per node: {}", avg_children_per_node);
 }

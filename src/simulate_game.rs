@@ -10,12 +10,19 @@ use marjapussi::game::gamestate::{FinishedTrick, GamePhase};
 use crate::ai::MarjapussiCheater;
 use crate::cheater::CheaterV1;
 
-pub fn four_cheaters() {
+pub fn four_cheaters(search_depth: u32) {
     let game_name = String::from("Cheater Game");
     let player_names = [String::from("Player 1"), String::from("Player 2"), String::from("Player 3"), String::from("Player 4")];
-    let mut players: Vec<CheaterV1> = player_names.iter().enumerate().map(|(place, name)| {CheaterV1::new(name, place.try_into().unwrap())}).collect();
-    let mut game = Game::new(game_name, player_names, None);
+    let mut players: Vec<CheaterV1> = player_names
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(place, name)| {
+                                            CheaterV1::new(name, place.try_into().unwrap(), search_depth)
+                                        })
+                                        .collect();
+    let mut game = Game::new(game_name, player_names.clone(), None);
     let mut player_at_turn;
+    let mut player_name;
 
     // print the start cards of each player
     println!("\nStart cards:");
@@ -28,11 +35,12 @@ pub fn four_cheaters() {
 
         // find out which player is at turn
         player_at_turn = game.state.player_at_turn().place_at_table.0;
+        player_name = &player_names[player_at_turn as usize];
 
         // print the current state of the game
         match game.state.phase {
-            GamePhase::StartTrick => println!("\nPlayer {} starting new trick", player_at_turn),
-            GamePhase::Bidding => println!("\nPlayer {}: thinking about the next bidding step", player_at_turn),
+            GamePhase::StartTrick => println!("\n{} starting new trick", player_name),
+            GamePhase::Bidding => println!("\n{}: thinking about the next bidding step", player_name),
             GamePhase::Raising => println!("\nRaising or starting first trick"),
             _ => ()
         }
@@ -40,7 +48,7 @@ pub fn four_cheaters() {
         match game.state.phase {
             GamePhase::WaitingForStart => (),
             GamePhase::Bidding => println!("  cards: {:?}", game.state.player_at_place(player::PlaceAtTable(player_at_turn)).cards),
-            _ => println!("{}: cards: {:?}", player_at_turn, game.state.player_at_place(player::PlaceAtTable(player_at_turn)).cards)
+            _ => println!("{}: cards: {:?}", player_name, game.state.player_at_place(player::PlaceAtTable(player_at_turn)).cards)
         }
 
         // let the player choose an action
@@ -50,7 +58,7 @@ pub fn four_cheaters() {
         match game.state.phase {
             GamePhase::WaitingForStart => (),
             GamePhase::Bidding => println!("  {:?}", chosen_action.action_type),
-            _ => println!("{:?}", chosen_action.action_type)
+            _ => println!("  {:?}", chosen_action.action_type)
         }
         
         // apply the chosen action to the game

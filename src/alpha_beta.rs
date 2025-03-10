@@ -14,7 +14,7 @@ pub trait State<M> {
 
 // this function finds the best move to make in the current game state
 // a recursive implementation of alpha-beta tree search is used within this function
-pub fn alpha_beta_search<M, S>(start_state: S, max_depth: Option<i32>) -> (M, i32)
+pub fn alpha_beta_search<M, S>(start_state: S, max_depth: Option<u32>) -> (M, i32)
 where M: Clone, S: State<M> {
 
     // the search has to start at a state where the maximizing player is at turn
@@ -49,7 +49,7 @@ where M: Clone, S: State<M> {
 
 
 // recursive implementation of alpha-beta search (called by alpha_beta_search)
-fn recursive_minimax<M, S>(start_node: &S, alpha: i32, beta: i32, depth: i32, max_depth: Option<i32>) -> i32
+fn recursive_minimax<M, S>(start_node: &S, alpha: i32, beta: i32, depth: u32, max_depth: Option<u32>) -> i32
 where S: State<M> {
     if Some(depth) == max_depth || start_node.is_leaf() {
         return start_node.evaluate();

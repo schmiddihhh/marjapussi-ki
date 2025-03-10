@@ -1,12 +1,15 @@
 use crate::alpha_beta::State;
 
+use std::thread::panicking;
 use std::vec;
 
-use marjapussi::game::Game;
+use marjapussi::game::cards::Card;
+use marjapussi::game::{legal_actions, Game};
 use marjapussi::game::gameevent::{ActionType, AnswerType, GameAction, GameCallback};
 use marjapussi::game::gamestate::FinishedTrick;
 use marjapussi::game::player::PlaceAtTable;
 use marjapussi::game::points::{points_pair, Points};
+
 
 // a node in the search tree
 pub struct AlphaBetaGameState {
@@ -18,30 +21,37 @@ pub struct AlphaBetaGameState {
 
 impl AlphaBetaGameState {
     fn legal_moves_unordered(&self) -> Vec<GameAction> {
+
+        // we sort out some irrelevant moves:
         // UndoRequests are useless for our tree search and create infinite paths
+        // we will just never raise at this point, so all raising actions can be sorted out
         // "useless questions" are questions that don't change the trump and therefore lead to evaluating the same subtree multiple times
         self.game.legal_actions()
             .into_iter()
             .filter(|action| {
                 action.action_type != ActionType::UndoRequest && 
-                !matches!(action.action_type, ActionType::NewBid(_)) &&     // this sorts out all raising actions
+                !matches!(action.action_type, ActionType::NewBid(_)) &&
                 !self.useless_question(action)
             })
             .collect()
     }
-    fn order_moves(&self, mut moves: Vec<GameAction>, do_sort: bool) -> Vec<GameAction> {
-        // println!("before ordering: {:?}", moves);
-        if do_sort {
-            // println!("sorting");
-            moves.sort_by_key(|move_| {
-                let game_after_move = self.apply_move(move_);
-                game_after_move.legal_moves_unordered().len()
-            });
-            // println!("done sorting");
-            // println!("after ordering: {:?}", moves);
-        }
-        moves
-    }
+
+
+    // fn order_moves(&self, mut moves: Vec<GameAction>, do_sort: bool) -> Vec<GameAction> {
+    //     // println!("before ordering: {:?}", moves);
+    //     if do_sort {
+    //         // println!("sorting");
+    //         moves.sort_by_key(|move_| {
+    //             let game_after_move = self.apply_move(move_);
+    //             game_after_move.legal_moves_unordered().len()
+    //         });
+    //         // println!("done sorting");
+    //         // println!("after ordering: {:?}", moves);
+    //     }
+    //     moves
+    // }
+
+
     fn useless_question(&self, action: &GameAction) -> bool {
         // only questions can be useless questions
         matches!(action.action_type, ActionType::Question(_)) && {
@@ -84,11 +94,16 @@ impl State<GameAction> for AlphaBetaGameState {
 
         // get the legal moves
         let legal_moves = self.legal_moves_unordered();
+        unsafe {
+            // execution is serial, so at most one AlphaBetaGameState will execute this at a time
+            super::COUNT_CHILDREN += legal_moves.len() as u32;
+        }
+        legal_moves
         // order the legal moves according to a heuristic
 
         // the current implementation of move ordering slows the execution down, probably too much overhead and bad heuristic
         // thus, ordering is deactivated
-        self.order_moves(legal_moves, false)
+        // self.order_moves(legal_moves, false)
     }
 
     fn apply_move(&self, next_move: &GameAction) -> Self {
@@ -101,6 +116,10 @@ impl State<GameAction> for AlphaBetaGameState {
     }
 
     fn is_leaf(&self) -> bool {
+        unsafe {
+            // execution is serial, so at most one AlphaBetaGameState will execute this at a time
+            super::COUNT_NODES += 1;
+        }
         self.game.ended()
     }
 
