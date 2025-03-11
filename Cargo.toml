@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-marjapussi = "0.1.1"
+marjapussi = "0.1.2"
