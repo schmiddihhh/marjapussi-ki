@@ -1,11 +1,12 @@
 use crate::alpha_beta::State;
 
+use std::collections::HashMap;
 use std::vec;
 
 use marjapussi::game::cards::Card;
 use marjapussi::game::gamestate::GamePhase;
 use marjapussi::game::player::PlaceAtTable;
-use marjapussi::game::Game;
+use marjapussi::game::{legal_actions, Game};
 use marjapussi::game::gameevent::{ActionType, AnswerType, GameAction, GameCallback};
 use marjapussi::game::points::{points_pair, Points};
 
@@ -17,7 +18,8 @@ pub struct AlphaBetaGameState {
     remaining_cards: Vec<Card>,
     points_per_party: [i32; 2],
     tricks_per_party: [i8; 2],
-    playing_party: Option<u8>
+    playing_party: Option<u8>,
+    equivalences: HashMap<Card, &Vec<Card>>
 }
 
 impl AlphaBetaGameState {
@@ -36,11 +38,12 @@ impl AlphaBetaGameState {
             _ => ()
         }
 
-        // join all players' cards into one vector
+        // join all players' cards into one vector and sort them ascendingly
         let mut remaining_cards = vec![];
         for player in &game.state.players {
             remaining_cards.extend(player.cards.clone());
         }
+        remaining_cards.sort();
         
         // get the current points in the game
         // this will hold the points of each player
@@ -98,14 +101,69 @@ impl AlphaBetaGameState {
         // UndoRequests are useless for our tree search and create infinite paths
         // we will just never raise at this point, so all raising actions can be sorted out
         // "useless questions" are questions that don't change the trump and therefore lead to evaluating the same subtree multiple times
-        self.game.legal_actions()
+        let legal_actions: Vec<GameAction> = self.game.legal_actions()
             .into_iter()
             .filter(|action| {
                 action.action_type != ActionType::UndoRequest && 
                 !matches!(action.action_type, ActionType::NewBid(_)) &&
                 !self.useless_question(action)
             })
-            .collect()
+            .collect();
+
+        unsafe {
+            super::COUNT_NODES_PER_CHILDREN[legal_actions.len() as usize] += 1;
+        }
+
+        legal_actions
+        
+        // // if two cards have no other cards between them, they are equally strong in cardplay
+        // // if such equivalences exist, we sort out all of these equivalent cards except the weakest one
+        // // for now, this is only applied to low cards, since they all give the same amount of points (0)
+
+        // // first, we have to separate cardplay moves from all other moves
+        // let mut legal_cardplay_actions = vec![];
+        // let mut legal_other_actions = vec![];
+        // legal_actions
+        //     .into_iter()
+        //     .for_each(|action| {
+        //         if matches!(action.action_type, ActionType::CardPlayed(_)) {
+        //             legal_cardplay_actions.push(action);
+        //         } else {
+        //             legal_other_actions.push(action);
+        //         }
+        //     });
+
+        // // if there are no legal cardplay actions, we can skip this
+        // // else, we will now sort out equivalent moves
+        // if legal_cardplay_actions.len() > 0 {
+
+        //     // the legal cardplay actions have to be sorted ascendingly, since the remaining cards are too
+        //     legal_cardplay_actions
+        //         .sort_by_key(|action| {
+        //             if let ActionType::CardPlayed(card) = action.action_type {
+        //                 action
+        //             } else {
+        //                 panic!("action should be a cardplay action, but something else was given")
+        //             }
+        //         });
+
+        //     // iterate through the remaining cards and drop equivalent actions
+        //     let mut iter_cardplay = legal_cardplay_actions.iter();
+        //     let mut current_action = iter_cardplay.next().unwrap();
+        //     let mut last_matched = false;
+        //     for current_remaining in &self.remaining_cards {
+        //         if matches!(current_action.action_type, ActionType::CardPlayed()) {
+        //             if last_matched == true {
+
+        //             }
+        //         }
+        //     }
+        // }
+
+
+        // let mut legal_actions_cut = legal_cardplay_actions;
+        // legal_actions_cut.extend(legal_other_actions);
+        // legal_actions_cut
     }
 
 
