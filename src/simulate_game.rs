@@ -78,6 +78,9 @@ pub fn bug() {
 }
 
 pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
+pub fn four_cheaters() {
+
+    // create players and game object
     let game_name = String::from("Cheater Game");
     let player_names = [String::from("Player 1"), String::from("Player 2"), String::from("Player 3"), String::from("Player 4")];
     let mut players: Vec<CheaterV1> = player_names
@@ -88,13 +91,22 @@ pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
                                         })
                                         .collect();
     let mut game = Game::new(game_name, player_names.clone(), cards);
+    let mut players: Vec<CheaterV1> = player_names
+        .iter()
+        .enumerate()
+        .map(|(place, name)| {
+            CheaterV1::new(name, place.try_into().unwrap())
+        })
+        .collect();
+    let mut game = Game::new(game_name, player_names.clone(), None);
     let mut player_at_turn;
+    let mut player_name;
     let mut player_name;
 
     // print the start cards of each player
     println!("\nStart cards:");
     for player in &game.state.players {
-        println!("{}: {:?}", player.place_at_table.0, player.cards);
+        println!("{}: {:?}", player.name, player.cards);
     }
 
     // iterate through the game step for step
@@ -103,18 +115,23 @@ pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
         // find out which player is at turn
         player_at_turn = game.state.player_at_turn().place_at_table.0;
         player_name = &player_names[player_at_turn as usize];
+        player_name = &players[player_at_turn as usize].name;
 
         // print the current state of the game
         match game.state.phase {
             GamePhase::StartTrick => println!("\n{} starting new trick", player_name),
             GamePhase::Bidding => println!("\n{}: thinking about the next bidding step", player_name),
             GamePhase::Raising => println!("\nRaising or starting first trick"),
+            GamePhase::StartTrick => println!("\n{}: starting new trick", player_name),
+            GamePhase::Bidding => println!("\n{}: thinking about the next bidding step", player_name),
+            GamePhase::Raising => println!("\n{}: raising or starting first trick", player_name),
             _ => ()
         }
         // print the player's cards
         match game.state.phase {
             GamePhase::WaitingForStart => (),
             GamePhase::Bidding => println!("  cards: {:?}", game.state.player_at_place(player::PlaceAtTable(player_at_turn)).cards),
+            _ => println!("{}: cards: {:?}", player_name, game.state.player_at_place(player::PlaceAtTable(player_at_turn)).cards)
             _ => println!("{}: cards: {:?}", player_name, game.state.player_at_place(player::PlaceAtTable(player_at_turn)).cards)
         }
 
@@ -134,7 +151,7 @@ pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
         // if a trick was just finished: print the winner
         if let Some(last_trick) = game.state.all_tricks.last() {
             if chosen_action.action_type == ActionType::CardPlayed(last_trick.cards.last().unwrap().clone()) {
-                println!("Trick goes to {}", last_trick.winner.0);
+                println!("Trick goes to {}", player_names[last_trick.winner.0 as usize]);
             }
         }
     }

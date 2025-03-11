@@ -120,7 +120,7 @@ impl CheaterV1 {
         // if this is our first bidding action, we have to 
         // find out what information we want to share in our bidding
         if game.state.bidding_history.len() < 4 {
-            self.assess_own_hand(&game);
+            self.to_communicate = bidding::assess_hand(&game.state.player_at_turn().cards);
         }
 
         let next_bidding_step = self.next_bidding_step(game);
@@ -140,12 +140,12 @@ impl CheaterV1 {
 
             println!("  next bidding step: {:?}", next_info);
             // skip bidding steps under certain conditions
-            if next_info == BiddingInfos::Ace && self.player_announced_ace(&game, game.state.player_at_turn().partner_place()) {
+            if next_info == BiddingInfos::Ace && bidding::player_announced_ace(&game, game.state.player_at_turn().partner_place()) {
                 // don't announce an ace if your partner already did
                 continue;
             } else if next_info == BiddingInfos::Halves2 
-                      && !self.player_announced_ace(&game, game.state.player_at_turn().partner_place())
-                      && !self.player_announced_ace(&game, game.state.player_at_turn().place_at_table.clone()) {
+                      && !bidding::player_announced_ace(&game, game.state.player_at_turn().partner_place())
+                      && !bidding::player_announced_ace(&game, game.state.player_at_turn().place_at_table.clone()) {
                 // don't announce two halves if no ace was announced in the party yet
                 continue;
             }

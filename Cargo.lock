@@ -386,7 +386,9 @@ checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 
 [[package]]
 name = "marjapussi"
-version = "0.1.0"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd69391f3cddf4fd267ac2c074ba8a387f6eff45f4748875f0a11a346e1e0e8e"
 dependencies = [
  "chrono",
  "clap",
