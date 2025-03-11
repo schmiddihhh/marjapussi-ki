@@ -1,5 +1,6 @@
 use std::usize;
 
+use marjapussi::game::cards::{Card, Suit, Value};
 use marjapussi::game::gameevent::{ActionType, GameCallback};
 use marjapussi::game::gameinfo::GameFinishedInfo;
 use marjapussi::game::player;
@@ -10,7 +11,73 @@ use marjapussi::game::gamestate::{FinishedTrick, GamePhase};
 use crate::ai::MarjapussiCheater;
 use crate::cheater::CheaterV1;
 
-pub fn four_cheaters(search_depth: u32) {
+pub fn bug() {
+    /*
+        reproducing a bug (probably in the framework)
+    */
+
+
+    let input = "0: [s-7, e-9, e-K, r-6, g-7, g-U, e-8, r-K, s-9]
+1: [s-8, g-6, e-U, r-7, s-6, e-Z, g-K, g-Z, s-K]
+2: [s-Z, r-O, e-6, r-8, s-U, r-9, g-9, r-Z, g-O]
+3: [g-A, s-O, e-O, r-U, e-7, g-8, s-A, r-A, e-A]";
+
+    fn card_from_string(card: &str) -> Card {
+        let mut suit_char = None;
+        let mut value_char = None;
+        for (num, char) in card.split("-").enumerate() {
+            if num == 0 {
+                suit_char = Some(char);
+            } else if num == 1 {
+                value_char = Some(char);
+                break
+            }
+        }
+
+        let suit = match suit_char.unwrap() {
+            "g" => Suit::Green,
+            "e" => Suit::Acorns,
+            "s" => Suit::Bells,
+            "r" => Suit::Red,
+            _ => panic!()
+        };
+
+        let value = match value_char.unwrap() {
+            "6" => Value::Six,
+            "7" => Value::Seven,
+            "8" => Value::Eight,
+            "9" => Value::Nine,
+            "U" => Value::Unter,
+            "O" => Value::Ober,
+            "K" => Value::King,
+            "Z" => Value::Ten,
+            "A" => Value::Ace,
+            _ => panic!()
+        };
+
+        Card { suit, value }
+    }
+
+    let mut cards = [vec![], vec![], vec![], vec![]];
+
+    for (player, line) in input.split("\n").enumerate() {
+        let cards_char = line
+            .split("[")
+            .collect::<Vec<&str>>()[1]
+            .split("]")
+            .collect::<Vec<&str>>()[0]
+            .split(", ")
+            .collect::<Vec<&str>>();
+        for card in cards_char {
+            cards[player].push(card_from_string(card));
+        };
+    };
+    println!("{:?}", cards);
+
+    four_cheaters(6, Some(cards));
+}
+
+pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
     let game_name = String::from("Cheater Game");
     let player_names = [String::from("Player 1"), String::from("Player 2"), String::from("Player 3"), String::from("Player 4")];
     let mut players: Vec<CheaterV1> = player_names
@@ -20,7 +87,7 @@ pub fn four_cheaters(search_depth: u32) {
                                             CheaterV1::new(name, place.try_into().unwrap(), search_depth)
                                         })
                                         .collect();
-    let mut game = Game::new(game_name, player_names.clone(), None);
+    let mut game = Game::new(game_name, player_names.clone(), cards);
     let mut player_at_turn;
     let mut player_name;
 

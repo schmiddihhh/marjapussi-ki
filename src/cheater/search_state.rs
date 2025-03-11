@@ -1,25 +1,98 @@
 use crate::alpha_beta::State;
 
 use std::thread::panicking;
-use std::vec;
+use std::{result, vec};
 
-use marjapussi::game::cards::Card;
+use marjapussi::game::cards::{Card, Suit};
 use marjapussi::game::{legal_actions, Game};
-use marjapussi::game::gameevent::{ActionType, AnswerType, GameAction, GameCallback};
-use marjapussi::game::gamestate::FinishedTrick;
-use marjapussi::game::player::PlaceAtTable;
+use marjapussi::game::gameevent::{ActionType, AnswerType, GameAction, GameCallback, GameEvent};
+use marjapussi::game::gamestate::{FinishedTrick, GamePhase};
+use marjapussi::game::player::{PlaceAtTable, PlayerTrumpPossibilities};
 use marjapussi::game::points::{points_pair, Points};
 
 
 // a node in the search tree
 pub struct AlphaBetaGameState {
-    pub owning_player: PlaceAtTable,
-    pub game: Game,
-    pub depth: i32,
-    pub debugging_depth: i32
+    owning_player: PlaceAtTable,
+    game: Game,
+    remaining_cards: Vec<Card>,
+    points_per_party: [i32; 2],
+    tricks_per_party: [i8; 2],
+    playing_party: Option<u8>
 }
 
 impl AlphaBetaGameState {
+    pub fn new(owning_player: PlaceAtTable, game: Game) -> Self {
+        /*
+            Creates a new AlphaBetaGameState from a marjapussi game.
+        */
+
+        // this function is only valid in the raising and cardplay phase, not while bidding or passing
+        match game.state.phase {
+            GamePhase::WaitingForStart | 
+            GamePhase::Bidding | 
+            GamePhase::PassingForth | 
+            GamePhase::PassingBack | 
+            GamePhase::Ended => panic!("AlphaBetaGameState can only be created from a game that is past the passing phase."),
+            _ => ()
+        }
+
+        // join all players' cards into one vector
+        let mut remaining_cards = vec![];
+        for player in &game.state.players {
+            remaining_cards.extend(player.cards.clone());
+        }
+        
+        // get the current points in the game
+        // this will hold the points of each player
+        let mut players_points = [Points(0); 4];
+        // here we store how many tricks each player got
+        let mut players_tricks: [i8; 4] = [0, 0, 0, 0];
+        // calculate the points from winning tricks and count the tricks per player
+        for trick in &game.state.all_tricks {
+            players_tricks[trick.winner.0 as usize] += 1;
+            players_points[trick.winner.0 as usize] += trick.points;
+        }
+        // points from winning the last trick (+20)
+        if game.state.all_tricks.len() == 9 {
+            let last_trick = game.state.all_tricks.last().unwrap();
+            players_points[last_trick.winner.0 as usize] += Points(20);
+        }
+        // calculate the points from announcing pairs
+        // also get the playing party
+        let mut playing_party = None;
+        for event in &game.all_events {
+            if ActionType::NewBid(game.state.value.0) == event.last_action.action_type {
+                playing_party = Some(event.last_action.player.0 % 2);
+            }
+            if let Some(GameCallback::NewTrump(suit)) = event.callback {
+                players_points[event.last_action.player.clone().0 as usize] +=
+                    points_pair(suit);
+            }
+        }
+        // add the player points together to get the party points
+        let points_per_party = [
+            players_points[0].0 + players_points[2].0,
+            players_points[1].0 + players_points[3].0
+        ];
+        // find out how many tricks each party got
+        let tricks_per_party = [
+            players_tricks[0] + players_tricks[2],
+            players_tricks[1] + players_tricks[3]
+        ];
+
+        // create the AlphaBetaGameState
+        AlphaBetaGameState {
+            owning_player,
+            game,
+            remaining_cards,
+            points_per_party,
+            tricks_per_party,
+            playing_party
+        }
+    }
+
+
     fn legal_moves_unordered(&self) -> Vec<GameAction> {
 
         // we sort out some irrelevant moves:
@@ -84,13 +157,13 @@ impl AlphaBetaGameState {
 impl State<GameAction> for AlphaBetaGameState {
     fn legal_moves(&self) -> Vec<GameAction> {
 
-        // debug prints to follow the process in the search tree
-        if self.depth <= self.debugging_depth {
-            for _ in 0..self.depth {
-                print!(" ");
-            }
-            println!("{}", self.depth);
-        }
+        // // debug prints to follow the process in the search tree
+        // if self.depth <= self.debugging_depth {
+        //     for _ in 0..self.depth {
+        //         print!(" ");
+        //     }
+        //     println!("{}", self.depth);
+        // }
 
         // get the legal moves
         let legal_moves = self.legal_moves_unordered();
@@ -107,11 +180,45 @@ impl State<GameAction> for AlphaBetaGameState {
     }
 
     fn apply_move(&self, next_move: &GameAction) -> Self {
+
+        // apply the move to the game
+        let new_game = self.game.apply_action(next_move.clone()).unwrap();
+
+        // if a card is played, remove this card from the remaining cards
+        let resulting_event = new_game.all_events.last().unwrap();
+        let mut new_remaining_cards = self.remaining_cards.clone();
+        if let ActionType::CardPlayed(played_card) = resulting_event.last_action.action_type.clone() {
+            new_remaining_cards.remove(new_remaining_cards.iter().position(|card| *card == played_card).unwrap());
+        }
+
+        // find out if the last action finished a trick
+        // if yes: add the points and the achieved trick to the party
+        let mut new_points = self.points_per_party;
+        let mut new_tricks = self.tricks_per_party;
+        if new_game.state.phase == GamePhase::StartTrick || new_game.state.phase == GamePhase::Ended {
+            let last_trick = new_game.state.all_tricks.last().unwrap();
+            let trick_winner_party = last_trick.winner.0 % 2;
+            new_points[trick_winner_party as usize] += last_trick.points.0;
+            new_tricks[trick_winner_party as usize] += 1;
+            // extra 20 points for the last trick
+            if new_game.state.phase == GamePhase::Ended {
+                new_points[trick_winner_party as usize] += 20;
+            }
+        }
+
+        // if a pair was just announced: calculate the points of this pair
+        if let Some(GameCallback::NewTrump(announced_pair)) = resulting_event.callback {
+            new_points[usize::from(resulting_event.last_action.player.0 % 2)] += points_pair(announced_pair).0
+        }
+
+        // create the resulting gamestate
         AlphaBetaGameState {
             owning_player: self.owning_player.clone(),
-            game: self.game.apply_action(next_move.clone()).unwrap(),
-            depth: self.depth + 1,
-            debugging_depth: self.debugging_depth
+            game: new_game,
+            remaining_cards: new_remaining_cards,
+            points_per_party: new_points,
+            tricks_per_party: new_tricks,
+            playing_party: self.playing_party
         }
     }
 
@@ -134,58 +241,30 @@ impl State<GameAction> for AlphaBetaGameState {
 
         // normally, this evaluation is only useful if the game is completed
         // a complete exploration of the search tree is infeasible with the current implementation
-        // -> this check is deactivated to enable a limited search depth by evaluating inner nodes
+        // -> the following check is deactivated to enable a limited search depth by evaluating inner nodes
         // if self.game.state.phase != GamePhase::Ended {
         //     panic!("Tried to evaluate an unfinished game");
         // }
-        
-        // this will hold the points each player made
-        let mut players_points = [Points(0); 4];
 
-        // calculate the points from winning tricks
-        let mut players_tricks: [Vec<FinishedTrick>; 4] = [vec![], vec![], vec![], vec![]];
-        for trick in &self.game.state.all_tricks {
-            players_tricks[trick.winner.0 as usize].push(trick.clone());
-            players_points[trick.winner.0 as usize] += trick.points;
-        }
 
-        // points from winning the last trick (+20)
-        let last_trick = self.game.state.all_tricks.last().unwrap();
-        players_points[last_trick.winner.0 as usize] += Points(20);
-
-        // calculate the points from announcing pairs
-        // also get the playing party
-        let mut playing_party = None;
-        for event in &self.game.all_events {
-            if ActionType::NewBid(self.game.state.value.0) == event.last_action.action_type {
-                playing_party = Some(event.last_action.player.0 % 2);
-            }
-            if let Some(GameCallback::NewTrump(suit)) = event.callback {
-                players_points[event.last_action.player.clone().0 as usize] +=
-                    points_pair(suit);
-            }
-        }
-
-        // calculate the points each party reached
-        let own_party_points = players_points[self.owning_player.0 as usize].0
-            + players_points[self.owning_player.partner().0 as usize].0;
-        let opponent_party_points = players_points[self.owning_player.next().0 as usize].0
-            + players_points[self.owning_player.next().partner().0 as usize].0;
+        // get the important values
+        let own_party_points = self.points_per_party[(self.owning_player.0 % 2) as usize];
+        let opponent_party_points = self.points_per_party[((self.owning_player.0 + 1) % 2) as usize];
         let game_value = &self.game.state.value.0;
 
         // find out if this was a schwarz game
-        let tricks_party_zero = players_tricks[0].len() + players_tricks[2].len();
+        let tricks_party_zero = self.tricks_per_party[0];
         let schwarz_game = tricks_party_zero == 0 || tricks_party_zero == 9;
 
         // final point difference between the own party and the opponent party
         let own_party = self.owning_player.0 % 2;
         let opponent_party = (own_party + 1) % 2;
-        if playing_party == None {
+        if self.playing_party == None {
 
             // if nobody played: every party gets the points it reached
             own_party_points - opponent_party_points
 
-        } else if playing_party == Some(own_party) {
+        } else if self.playing_party == Some(own_party) {
             if !schwarz_game {
                 if own_party_points >= *game_value {
                     // we played and won the game without playing schwarz
@@ -203,7 +282,7 @@ impl State<GameAction> for AlphaBetaGameState {
                     - 2 * game_value - opponent_party_points
                 }
             }
-        } else if playing_party == Some(opponent_party) {
+        } else if self.playing_party == Some(opponent_party) {
             if !schwarz_game {
                 if opponent_party_points >= *game_value {
                     // the opponents played and won without playing schwarz

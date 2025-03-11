@@ -233,7 +233,7 @@ impl MarjapussiCheater for CheaterV1 {
                     unsafe {
                         COUNT_TREES += 1;
                     }
-                    alpha_beta_search(AlphaBetaGameState{owning_player: self.position.clone(), game, depth: 0, debugging_depth: -1}, Some(self.search_depth)).0
+                    alpha_beta_search(AlphaBetaGameState::new(self.position.clone(), game), Some(self.search_depth)).0
                 },
                 _ => legal_actions.into_iter().nth(0).expect("Player was asked to choose an action, but there are no legal actions")
             }
