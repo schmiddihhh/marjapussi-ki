@@ -16,11 +16,17 @@ pub fn bug() {
         reproducing a bug (probably in the framework)
     */
 
+    // reproducing the framework bug in the bidding phase
+//     let bidding_bug_input = "0: [s-7, e-9, e-K, r-6, g-7, g-U, e-8, r-K, s-9]
+// 1: [s-8, g-6, e-U, r-7, s-6, e-Z, g-K, g-Z, s-K]
+// 2: [s-Z, r-O, e-6, r-8, s-U, r-9, g-9, r-Z, g-O]
+// 3: [g-A, s-O, e-O, r-U, e-7, g-8, s-A, r-A, e-A]";
 
-    let input = "0: [s-7, e-9, e-K, r-6, g-7, g-U, e-8, r-K, s-9]
-1: [s-8, g-6, e-U, r-7, s-6, e-Z, g-K, g-Z, s-K]
-2: [s-Z, r-O, e-6, r-8, s-U, r-9, g-9, r-Z, g-O]
-3: [g-A, s-O, e-O, r-U, e-7, g-8, s-A, r-A, e-A]";
+    // reproducing a probably wrong point calculation
+    let input = "0: [r-U, g-9, g-A, r-Z, r-K, g-7, g-Z, s-7, r-7]
+1: [s-6, e-O, g-K, e-A, e-6, e-8, g-O, s-O, r-8]
+2: [e-K, g-6, s-A, e-9, s-9, e-U, r-9, r-O, g-8]
+3: [s-K, e-Z, r-6, s-8, e-7, g-U, r-A, s-Z, s-U]";
 
     fn card_from_string(card: &str) -> Card {
         let mut suit_char = None;
@@ -74,14 +80,19 @@ pub fn bug() {
     };
     println!("{:?}", cards);
 
-    four_cheaters(6, Some(cards));
+    four_cheaters(12, Some(cards));
 }
 
 pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
 
     // create players and game object
     let game_name = String::from("Cheater Game");
-    let player_names = [String::from("Player 1"), String::from("Player 2"), String::from("Player 3"), String::from("Player 4")];
+    let player_names = [
+        String::from("Player 1"), 
+        String::from("Player 2"), 
+        String::from("Player 3"), 
+        String::from("Player 4")
+    ];
     let mut players: Vec<CheaterV1> = player_names
                                         .iter()
                                         .enumerate()
@@ -90,8 +101,6 @@ pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
                                         })
                                         .collect();
     let mut game = Game::new(game_name, player_names.clone(), cards);
-    let mut player_at_turn;
-    let mut player_name;
 
     // print the start cards of each player
     println!("\nStart cards:");
@@ -100,6 +109,8 @@ pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
     }
 
     // iterate through the game step for step
+    let mut player_at_turn;
+    let mut player_name;
     while game.state.phase != GamePhase::Ended {
 
         // find out which player is at turn
@@ -141,7 +152,7 @@ pub fn four_cheaters(search_depth: u32, cards: Option<[Vec<Card>; 4]>) {
         }
     }
 
-    // print the final info
+    // print some info about the finished game
     println!("\nFinal info:");
     let final_info = GameFinishedInfo::from(game.clone());
     print_evaluation(&game, &final_info);

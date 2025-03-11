@@ -3,7 +3,7 @@ mod simulate_game;
 mod ai;
 mod cheater;
 
-use std::time::Instant;
+// use std::time::Instant;
 
 fn main() {
 

@@ -1,4 +1,6 @@
-use marjapussi::game::{cards::{halves, pairs, Card, Suit, Value}, gameevent::ActionType, player::PlaceAtTable, Game};
+use std::collections::HashMap;
+
+use marjapussi::game::{cards::{halves, pairs, Card, Suit, Value}, gameevent::ActionType, player::PlaceAtTable};
 
 #[derive(PartialEq, Debug)]
 pub enum BiddingInfos {
@@ -8,6 +10,100 @@ pub enum BiddingInfos {
     Halves3_4,
     Halves2
 }
+
+
+pub fn next_bidding_step(own_position: &PlaceAtTable,
+                         hand_cards: &Vec<Card>,
+                         partner_cards: &Vec<Card>,
+                         bidding_history: &Vec<(ActionType, PlaceAtTable)>, 
+                         knowledge: &mut HashMap<String, String>, 
+                         to_communicate: &mut Vec<BiddingInfos>) -> i32 {
+    /*
+        This function derives the next bidding step from the hand cards, the bidding history and previously derived information.
+     */
+        
+    // if this is our first bidding action, we have to 
+    // find out what information we want to share in our bidding
+    if bidding_history.len() < 4 {
+        to_communicate.extend(assess_hand(hand_cards));
+    }
+    
+    let partner_position = PlaceAtTable((own_position.0 + 2) % 4);
+
+    // get the next information we want to share
+    while let Some(next_info) = to_communicate.pop() {
+
+        println!("  next bidding step: {:?}", next_info);
+        // skip bidding steps under certain conditions
+        if next_info == BiddingInfos::Ace && player_announced_ace(bidding_history, &partner_position) {
+            // don't announce an ace if your partner already did
+            continue;
+        } else if next_info == BiddingInfos::Halves2 
+                  && !player_announced_ace(bidding_history, &partner_position)
+                  && !player_announced_ace(bidding_history, &own_position) {
+            // don't announce two halves if no ace was announced in the party yet
+            continue;
+        }
+        
+        // get the corresponding step for the information
+        let step = match next_info {
+            BiddingInfos::Ace => 5,
+            BiddingInfos::BigPair => 15,
+            BiddingInfos::SmallPair => 10,
+            BiddingInfos::Halves3_4 => 10,
+            BiddingInfos::Halves2 => 5,
+        };
+
+        // get the current game value (last bidding step) and the new value after bidding
+        let last_bidding_action = bidding_history
+            .iter()
+            .rev()
+            .find(|(action, _)| {
+                matches!(action, ActionType::NewBid(_))
+            })
+            .unwrap_or(&(ActionType::NewBid(115), PlaceAtTable(u8::MAX))).0
+            .clone();
+        let current_value = if let ActionType::NewBid(value) = last_bidding_action {
+            value
+        } else {
+            panic!()
+        };
+        let mut next_value = current_value + step;
+        
+        if current_value < 140 && next_value >= 140 {
+            next_value += 5;
+        }
+        
+        if next_value > 420 {
+            println!(
+                "  folding since I can't exceed the game limit, remaining steps were {:?}",
+                std::iter::once(&next_info).chain(to_communicate.iter()).collect::<Vec<_>>()
+            );
+            return 0;
+        }
+        
+        if next_value < 140 {
+            println!("  bidding {} for {:?} while staying under 140", next_value, next_info);
+            return next_value;
+        } else {
+            let cards_together: Vec<Card> = hand_cards.clone()
+                .into_iter()
+                .chain(partner_cards.clone())
+                .collect();
+            let have_secure_pair = !pairs(cards_together).is_empty();
+            if have_secure_pair {
+                println!("  bidding {} for {:?} while being sure that we have a pair", next_value, next_info);
+                return next_value;
+            } else {
+                println!("  not going over 140 for {:?} since I am not sure if we have a pair; trying next bidding step", next_info);
+            }
+        }
+    }
+    
+    println!("  folding since there is nothing to communicate");
+    0
+}
+
 
 pub fn assess_hand(cards: &Vec<Card>) -> Vec<BiddingInfos> {
     /* 
@@ -58,7 +154,7 @@ pub fn assess_hand(cards: &Vec<Card>) -> Vec<BiddingInfos> {
 }
 
 
-pub fn player_announced_ace(game: &Game, player: PlaceAtTable) -> bool {
+pub fn player_announced_ace(bidding_history: &Vec<(ActionType, PlaceAtTable)>, player: &PlaceAtTable) -> bool {
     /*
         !!!! Not working properly!
      */
@@ -68,7 +164,7 @@ pub fn player_announced_ace(game: &Game, player: PlaceAtTable) -> bool {
     // find out if the partner announced an ace
     let result = vec!((ActionType::NewBid(115), PlaceAtTable(0)))
                 .into_iter()
-                .chain(game.state.bidding_history.clone())
+                .chain(bidding_history.clone())
                 .collect::<Vec<(ActionType, PlaceAtTable)>>()   // at this point, we have a Vec with all bidding steps, including the imaginary first step of 115
                 .windows(4)
                 .map(|window| {
@@ -77,76 +173,16 @@ pub fn player_announced_ace(game: &Game, player: PlaceAtTable) -> bool {
                         (_, ActionType::NewBid(bid1), ActionType::StopBidding, ActionType::NewBid(bid2)) => bid2 - bid1,
                         (ActionType::NewBid(bid1), ActionType::StopBidding, ActionType::StopBidding, ActionType::NewBid(bid2)) => bid2 - bid1,
                         (_, _, ActionType::NewBid(bid1), ActionType::NewBid(bid2)) => bid2 - bid1,
-                        _ => panic!("Don't know how to handle this bidding history: {:?}", game.state.bidding_history)
+                        _ => panic!("Don't know how to handle this bidding history: {:?}", bidding_history)
                     };
                     (step, &window[3].1)
                 })
                 .any(|(step, player_num)| {
-                    *player_num == player && step == 5
+                    *player_num == *player && step == 5
                 });
     match result {
         true => println!("  he did"),
         false => println!("  he didn't")
     };
     result
-}
-
-
-fn next_bidding_step(to_communicate: &mut Vec<BiddingInfos>, game: Game) -> i32 {
-    while let Some(next_info) = to_communicate.pop() {
-
-        println!("  next bidding step: {:?}", next_info);
-        // skip bidding steps under certain conditions
-        if next_info == BiddingInfos::Ace && player_announced_ace(&game, game.state.player_at_turn().partner_place()) {
-            // don't announce an ace if your partner already did
-            continue;
-        } else if next_info == BiddingInfos::Halves2 
-                  && !player_announced_ace(&game, game.state.player_at_turn().partner_place())
-                  && !player_announced_ace(&game, game.state.player_at_turn().place_at_table.clone()) {
-            // don't announce two halves if no ace was announced in the party yet
-            continue;
-        }
-        
-        let step = match next_info {
-            BiddingInfos::Ace => 5,
-            BiddingInfos::BigPair => 15,
-            BiddingInfos::SmallPair => 10,
-            BiddingInfos::Halves3_4 => 10,
-            BiddingInfos::Halves2 => 5,
-        };
-        let current_value = game.state.value.0;
-        let mut next_value = current_value + step;
-        
-        if current_value < 140 && next_value >= 140 {
-            next_value += 5;
-        }
-        
-        if next_value > 420 {
-            println!(
-                "  folding since I can't exceed the game limit, remaining steps were {:?}",
-                std::iter::once(&next_info).chain(to_communicate.iter()).collect::<Vec<_>>()
-            );
-            return 0;
-        }
-        
-        if next_value < 140 {
-            println!("  bidding {} for {:?} while staying under 140", next_value, next_info);
-            return next_value;
-        } else {
-            let cards_together: Vec<Card> = game.state.player_at_turn().cards.clone()
-                .into_iter()
-                .chain(game.state.partner().cards.clone())
-                .collect();
-            let have_secure_pair = !pairs(cards_together).is_empty();
-            if have_secure_pair {
-                println!("  bidding {} for {:?} while being sure that we have a pair", next_value, next_info);
-                return next_value;
-            } else {
-                println!("  not going over 140 for {:?} since I am not sure if we have a pair; trying next bidding step", next_info);
-            }
-        }
-    }
-    
-    println!("  folding since there is nothing to communicate");
-    0
 }

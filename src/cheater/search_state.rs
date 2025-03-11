@@ -1,13 +1,12 @@
 use crate::alpha_beta::State;
 
-use std::thread::panicking;
-use std::{result, vec};
+use std::vec;
 
-use marjapussi::game::cards::{Card, Suit};
-use marjapussi::game::{legal_actions, Game};
-use marjapussi::game::gameevent::{ActionType, AnswerType, GameAction, GameCallback, GameEvent};
-use marjapussi::game::gamestate::{FinishedTrick, GamePhase};
-use marjapussi::game::player::{PlaceAtTable, PlayerTrumpPossibilities};
+use marjapussi::game::cards::Card;
+use marjapussi::game::gamestate::GamePhase;
+use marjapussi::game::player::PlaceAtTable;
+use marjapussi::game::Game;
+use marjapussi::game::gameevent::{ActionType, AnswerType, GameAction, GameCallback};
 use marjapussi::game::points::{points_pair, Points};
 
 
