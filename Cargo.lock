@@ -414,6 +414,8 @@ name = "marjapussi-ki"
 version = "0.1.0"
 dependencies = [
  "marjapussi",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

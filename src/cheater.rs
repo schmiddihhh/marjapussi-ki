@@ -1,7 +1,7 @@
-mod search_state;
+mod search;
 mod bidding;
 
-use search_state::AlphaBetaGameState;
+use search::AlphaBetaGameState;
 use bidding::BiddingInfos;
 use super::ai::MarjapussiCheater;
 use crate::alpha_beta::alpha_beta_search;
@@ -11,9 +11,9 @@ use marjapussi::game::gamestate::GamePhase;
 use marjapussi::game::player::PlaceAtTable;
 use std::collections::HashMap;
 
-static mut COUNT_TREES: u32 = 0;
-static mut COUNT_NODES: u32 = 0;
-static mut COUNT_CHILDREN: u32 = 0;
+static mut COUNT_TREES: u64 = 0;
+static mut COUNT_NODES: u64 = 0;
+static mut COUNT_CHILDREN: u64 = 0;
 static mut COUNT_NODES_PER_CHILDREN: [i32; 20] = [0; 20];
 
 
@@ -93,12 +93,12 @@ impl MarjapussiCheater for CheaterV1 {
                 GamePhase::Bidding => self.bid(game, legal_actions),
                 // in case the game phase is GamePhase::Raising, we will sort out all raising actions within the search and just play a card
                 GamePhase::StartTrick | GamePhase::Trick | GamePhase::Raising => {
-                    unsafe {
-                        if COUNT_TREES == 1 {
-                            print_avg_tree_size();
-                        }
-                        COUNT_TREES += 1;
-                    }
+                    // unsafe {
+                    //     if COUNT_TREES == 1 {
+                    //         print_avg_tree_size();
+                    //     }
+                    //     COUNT_TREES += 1;
+                    // }
                     alpha_beta_search(AlphaBetaGameState::new(self.position.clone(), game), Some(self.search_depth)).0
                 },
                 _ => legal_actions.into_iter().nth(0).expect("Player was asked to choose an action, but there are no legal actions")
@@ -109,11 +109,11 @@ impl MarjapussiCheater for CheaterV1 {
 
 
 pub unsafe fn print_avg_tree_size() {
-    let avg_nodes_per_tree = f64::from(COUNT_NODES) / f64::from(COUNT_TREES);
-    let avg_children_per_node = f64::from(COUNT_CHILDREN) / f64::from(COUNT_NODES);
+    let avg_nodes_per_tree = (COUNT_NODES as f64) / (COUNT_TREES as f64);
+    let avg_children_per_node = (COUNT_CHILDREN as f64) / (COUNT_NODES as f64);
     let mut avg_nodes_per_children = [0.0; 20];
     for (index, num) in COUNT_NODES_PER_CHILDREN.iter().enumerate() {
-        avg_nodes_per_children[index] += f64::from(*num) / f64::from(COUNT_NODES)
+        avg_nodes_per_children[index] += (*num as f64) / (COUNT_NODES as f64)
     }
     println!("avg nodes per tree: {}", avg_nodes_per_tree);
     println!("avg children per node: {}", avg_children_per_node);

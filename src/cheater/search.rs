@@ -1,3 +1,5 @@
+mod optimizations;
+
 use crate::alpha_beta::State;
 
 use std::collections::HashMap;
@@ -18,8 +20,7 @@ pub struct AlphaBetaGameState {
     remaining_cards: Vec<Card>,
     points_per_party: [i32; 2],
     tricks_per_party: [i8; 2],
-    playing_party: Option<u8>,
-    equivalences: HashMap<Card, &Vec<Card>>
+    playing_party: Option<u8>
 }
 
 impl AlphaBetaGameState {
@@ -226,7 +227,7 @@ impl State<GameAction> for AlphaBetaGameState {
         let legal_moves = self.legal_moves_unordered();
         unsafe {
             // execution is serial, so at most one AlphaBetaGameState will execute this at a time
-            super::COUNT_CHILDREN += legal_moves.len() as u32;
+            super::COUNT_CHILDREN += legal_moves.len() as u64;
         }
         legal_moves
         // order the legal moves according to a heuristic

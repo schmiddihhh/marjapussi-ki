@@ -10,8 +10,8 @@ fn main() {
     // simulate_game::bug();
 
     // run some games and measure the execution time
-    let iterations = 1;
-    let search_depth = 12;
+    let iterations = 1000;
+    let search_depth = 6;
     let now = Instant::now();
     for _ in 0..iterations {
         simulate_game::four_cheaters(search_depth, None);
